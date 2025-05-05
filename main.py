@@ -5,36 +5,71 @@ import numpy as np
 import sys
 import random
 import shutil
-
+import yaml
 sys.path.append('/Users/jordandavis/Documents/GitHub/DS677_Project/ultralytics/')
 from ultralytics import YOLO
 
-#https://www.kaggle.com/datasets/stealthknight/bird-vs-drone
-base_dir = '/Users/jordandavis/Documents/DS677/Dataset/'
-test_dir = base_dir + 'test/'
-test_images_dir = test_dir + 'images/'
-image_paths = []
-image_labels = []
-destination_dir = '/Users/jordandavis/Documents/DS677/Dataset/random'
+# ————— CONFIG —————
+base = '/Users/jordandavis/Documents/DS677/Dataset'
+train_imgs = os.path.join(base, 'train', 'images')
+train_lbls = os.path.join(base, 'train', 'labels')
+subset_dir = os.path.join(base, 'subset')       # ← where subset lives
+num_samples = 200                                # ← how many images you want
 
+# ————— MAKE SUBSET DIRS —————
+for split in ['train']:
+    for kind in ['images','labels']:
+        d = os.path.join(subset_dir, split, kind)
+        os.makedirs(d, exist_ok=True)
 
-#function to choose random files from folders and place them in a new folder
-def random_file_choose(source_dir, destination_dir, num_files):
-    files = [f for f in os.listdir(source_dir) 
-             if os.path.isfile(os.path.join(source_dir, f))]
-    
-    selected_files = random.sample(files,num_files)
+# ————— SAMPLE & COPY —————
+all_imgs = [f for f in os.listdir(train_imgs) 
+            if f.lower().endswith(('.jpg','.png'))]
+chosen = random.sample(all_imgs, num_samples)
 
-    os.makedirs(destination_dir, exist_ok=True)
+for fn in chosen:
+    # copy image
+    shutil.copy(
+        os.path.join(train_imgs, fn),
+        os.path.join(subset_dir, 'train', 'images', fn)
+    )
+    # copy label (same name but .txt)
+    lbl = fn.rsplit('.',1)[0] + '.txt'
+    src_lbl = os.path.join(train_lbls, lbl)
+    dst_lbl = os.path.join(subset_dir, 'train', 'labels', lbl)
+    if os.path.exists(src_lbl):
+        shutil.copy(src_lbl, dst_lbl)
 
-    for file in selected_files:
-        shutil.copy(os.path.join(source_dir,file), os.join(destination_dir,file))
-    return files
+# ————— WRITE data.yaml —————
+cfg = {
+    'path': subset_dir,
+    'train': 'train/images',
+    'val':   'train/images',   # or point to your real val set
+    'test':  'train/images',   # or point to your real test set
+    'nc':    2,
+    'names': ['bird','drone']
+}
 
+with open(os.path.join(subset_dir, 'data.yaml'), 'w') as f:
+    yaml.safe_dump(cfg, f)
 
-files = random_file_choose(test_images_dir, base_dir,10)
+# ————— TRAIN —————
+model = YOLO('yolov10n.yaml')   # or whatever variant you like
+model.train(
+    data=os.path.join(subset_dir,'data.yaml'),
+    epochs=30,
+    imgsz=640,
+    batch=16,
+    project='bird-drone-subset',
+    name=f'subset{num_samples}',
+    pretrained=True
+)
+results = model.val(data=os.path.join(subset_dir,'data.yaml'), plots=True)
 
+# this returns [precision, recall, mAP50, mAP50-95]
+p, r, mAP50, mAP5095 = results.box.mean_results()
 
-model = YOLO('yolov8n.pt')  # Or yolov8s.pt or yolov8m.pt depending on your compute
-
-model.train(data='/Users/jordandavis/Documents/DS677/Dataset/data.yaml', epochs=50, imgsz=640)
+print(f"Precision:      {p:.4f}")
+print(f"Recall:         {r:.4f}")
+print(f"mAP @ 0.50:     {mAP50:.4f}")
+print(f"mAP @ 0.50–0.95: {mAP5095:.4f}")
