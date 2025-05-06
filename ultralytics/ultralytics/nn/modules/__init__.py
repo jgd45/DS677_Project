@@ -75,6 +75,9 @@ from .conv import (
     LightConv,
     RepConv,
     SpatialAttention,
+    GlobalAvgPool,
+    Flatten,
+    ClassifierHead
 )
 from .head import (
     OBB,
@@ -178,5 +181,8 @@ __all__ = (
     "PSA",
     "TorchVision",
     "Index",
-    "A2C2f",
+    "A2C2f",    
+    "GlobalAvgPool",
+    "Flatten",
+    "ClassifierHead",
 )

@@ -6,70 +6,118 @@ import sys
 import random
 import shutil
 import yaml
-sys.path.append('/Users/jordandavis/Documents/GitHub/DS677_Project/ultralytics/')
+sys.path.append('/home/ordan_avis/DS677_Project/ultralytics/')
 from ultralytics import YOLO
 
 # ————— CONFIG —————
-base = '/Users/jordandavis/Documents/DS677/Dataset'
-train_imgs = os.path.join(base, 'train', 'images')
-train_lbls = os.path.join(base, 'train', 'labels')
-subset_dir = os.path.join(base, 'subset')       # ← where subset lives
-num_samples = 200                                # ← how many images you want
+base       = '/home/ordan_avis/DS677/Dataset'        # root of your full dataset
+subset_dir = os.path.join(base, 'subset')            # where we’ll build the subset
+splits     = ['train', 'valid', 'test']              # original split names
+# number of images to sample per split
+num_samples = {'train': 1000, 'valid': 500, 'test': 500}
+classes    = ['bird', 'drone']
 
-# ————— MAKE SUBSET DIRS —————
-for split in ['train']:
-    for kind in ['images','labels']:
-        d = os.path.join(subset_dir, split, kind)
-        os.makedirs(d, exist_ok=True)
-
-# ————— SAMPLE & COPY —————
-all_imgs = [f for f in os.listdir(train_imgs) 
-            if f.lower().endswith(('.jpg','.png'))]
-chosen = random.sample(all_imgs, num_samples)
-
-for fn in chosen:
-    # copy image
-    shutil.copy(
-        os.path.join(train_imgs, fn),
-        os.path.join(subset_dir, 'train', 'images', fn)
-    )
-    # copy label (same name but .txt)
-    lbl = fn.rsplit('.',1)[0] + '.txt'
-    src_lbl = os.path.join(train_lbls, lbl)
-    dst_lbl = os.path.join(subset_dir, 'train', 'labels', lbl)
-    if os.path.exists(src_lbl):
-        shutil.copy(src_lbl, dst_lbl)
-
-# ————— WRITE data.yaml —————
-cfg = {
-    'path': subset_dir,
-    'train': 'train/images',
-    'val':   'train/images',   # or point to your real val set
-    'test':  'train/images',   # or point to your real test set
-    'nc':    2,
-    'names': ['bird','drone']
+# file‐prefix → class mapping, per split
+prefix_map = {
+    'train': ('BT', 'DT'),   # train images start with BT (bird) or DT (drone)
+    'valid': ('BV', 'DV'),   # valid images start with BV (bird) or DV (drone)
+    'test':  ('BT', 'DT'),   # test uses the same prefixes as train
 }
 
-with open(os.path.join(subset_dir, 'data.yaml'), 'w') as f:
-    yaml.safe_dump(cfg, f)
+# ————— CLEAN & CREATE SUBSET ROOT —————
+if os.path.exists(subset_dir):
+    shutil.rmtree(subset_dir)
+os.makedirs(subset_dir, exist_ok=True)
 
-# ————— TRAIN —————
-model = YOLO('yolov10n.yaml')   # or whatever variant you like
+# ————— STRATIFIED SAMPLE & COPY —————
+for split in splits:
+    bird_pref, drone_pref = prefix_map[split]
+    src_dir = os.path.join(base, split, 'images')
+    dst_dir = os.path.join(subset_dir, split, 'images')
+    os.makedirs(dst_dir, exist_ok=True)
+
+    # list all image files
+    all_imgs = [f for f in os.listdir(src_dir) if f.lower().endswith(('.jpg', '.png'))]
+
+    # split into bird vs drone pools
+    bird_pool  = [f for f in all_imgs if f.startswith(bird_pref)]
+    drone_pool = [f for f in all_imgs if f.startswith(drone_pref)]
+    per_class  = num_samples[split] // 2
+
+    # sample up to per_class from each pool
+    chosen = []
+    chosen += random.sample(bird_pool,  min(per_class, len(bird_pool)))
+    chosen += random.sample(drone_pool, min(per_class, len(drone_pool)))
+
+    # if there’s any remainder, fill from the combined pool
+    full_pool = bird_pool + drone_pool
+    while len(chosen) < num_samples[split]:
+        chosen.append(random.choice(full_pool))
+
+    # copy the chosen images
+    for fn in chosen:
+        shutil.copy(os.path.join(src_dir, fn), os.path.join(dst_dir, fn))
+
+# ————— RESTRUCTURE FOR CLASSIFICATION —————
+# move images into split/{bird,drone} based on prefixes
+for split in splits:
+    bird_pref, drone_pref = prefix_map[split]
+    img_dir = os.path.join(subset_dir, split, 'images')
+
+    # make class subfolders
+    for cls in classes:
+        os.makedirs(os.path.join(subset_dir, split, cls), exist_ok=True)
+
+    # move each image into the appropriate class folder
+    for fn in os.listdir(img_dir):
+        if not fn.lower().endswith(('.jpg', '.png')):
+            continue
+        if fn.startswith(bird_pref):
+            cls = 'bird'
+        elif fn.startswith(drone_pref):
+            cls = 'drone'
+        else:
+            # fallback: treat any other prefix as drone
+            cls = 'drone'
+        shutil.move(
+            os.path.join(img_dir, fn),
+            os.path.join(subset_dir, split, cls, fn)
+        )
+
+    # remove the now‐empty images folder
+    shutil.rmtree(img_dir)
+
+# ————— RENAME valid → val —————
+# classification mode expects 'train', 'val', 'test'
+os.rename(
+    os.path.join(subset_dir, 'valid'),
+    os.path.join(subset_dir, 'val')
+)
+
+print("Subset ready under:", subset_dir)
+print("Splits:", os.listdir(subset_dir))  # should list ['train', 'val', 'test']
+
+# ————— TRAIN AS CLASSIFIER —————
+# Ensure your yolov10n.yaml has the built-in Classify head:
+# head:
+#   - [-1, 1, Classify, [nc]]
+# and at top: nc: 2
+
+model = YOLO('yolov10n.yaml', task='classify')
+run_name = f"subset_{num_samples['train']}_{num_samples['valid']}_{num_samples['test']}"
+
 model.train(
-    data=os.path.join(subset_dir,'data.yaml'),
-    epochs=30,
-    imgsz=640,
-    batch=16,
+    data=subset_dir,       # point to the root folder
+    epochs=100,
+    imgsz=224,             # smaller for classification
+    batch=16,              # reduce if you hit OOM
     project='bird-drone-subset',
-    name=f'subset{num_samples}',
+    name=run_name,
     pretrained=True
 )
-results = model.val(data=os.path.join(subset_dir,'data.yaml'), plots=True)
 
-# this returns [precision, recall, mAP50, mAP50-95]
-p, r, mAP50, mAP5095 = results.box.mean_results()
 
-print(f"Precision:      {p:.4f}")
-print(f"Recall:         {r:.4f}")
-print(f"mAP @ 0.50:     {mAP50:.4f}")
-print(f"mAP @ 0.50–0.95: {mAP5095:.4f}")
+# ————— VALIDATE & REPORT —————
+metrics = model.val(data=subset_dir, plots=True)
+print(f"Top-1 Accuracy: {metrics.top1:.4f}")
+print(f"Top-5 Accuracy: {metrics.top5:.4f}")

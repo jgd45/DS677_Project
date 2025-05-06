@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
 __all__ = (
     "Conv",
     "Conv2",
@@ -90,6 +91,33 @@ class Conv(nn.Module):
         """
         return self.act(self.conv(x))
 
+class GlobalAvgPool(nn.Module):
+    """ Collapse H×W to 1×1 by averaging """
+    def forward(self, x):
+        # x: (B, C, H, W) → (B, C, 1, 1)
+        return x.mean(dim=(2, 3), keepdim=True)
+
+class Flatten(nn.Module):
+    """ Flatten (B, C, 1, 1) → (B, C) """
+    def forward(self, x):
+        return x.view(x.size(0), -1)
+
+class ClassifierHead(nn.Module):
+    """ Simple linear classifier: Conv→GAP→Flatten→Linear """
+    def __init__(self, in_channels, num_classes):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, in_channels, 1, 1, bias=False)
+        self.bn   = nn.BatchNorm2d(in_channels)
+        self.act  = nn.SiLU()
+        self.gap  = GlobalAvgPool()
+        self.flat = Flatten()
+        self.fc   = nn.Linear(in_channels, num_classes)
+
+    def forward(self, x):
+        x = self.act(self.bn(self.conv(x)))
+        x = self.gap(x)
+        x = self.flat(x)
+        return self.fc(x)
 
 class Conv2(Conv):
     """
