@@ -8,7 +8,7 @@
 nc: 2 # number of classes
 scales: # model compound scaling constants, i.e. 'model=yolov10n.yaml' will call yolov10.yaml with scale 'n'
   # [depth, width, max_channels]
-  b: [0.67, 1.00, 512]
+  b: [0.67, 1.00, 1024]
 
 backbone:
   # [from, repeats, module, args]
@@ -17,10 +17,12 @@ backbone:
   - [-1, 5, C2f, [128, True]]
   - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8
   - [-1, 8, C2f, [256, True]]
+  - [-1, 1, nn.Dropout2d, [0.1]]   
   - [-1, 1, SCDown, [512, 3, 2]] # 5-P4/16
   - [-1, 8, C2f, [512, True]]
   - [-1, 1, SCDown, [1024, 3, 2]] # 7-P5/32
   - [-1, 5, C2fCIB, [1024, True]]
+  - [-1, 1, PSA,  [1024]]        
   - [-1, 1, SPPF, [1024, 5]] # 9
   - [-1, 1, PSA, [1024]] # 10
 
