@@ -14,7 +14,7 @@ base       = '/home/ordan_avis/DS677/Dataset'        # root of your full dataset
 subset_dir = os.path.join(base, 'subset')            # where we’ll build the subset
 splits     = ['train', 'valid', 'test']              # original split names
 # number of images to sample per split
-num_samples = {'train': 1000, 'valid': 500, 'test': 500}
+num_samples = {'train': 3000, 'valid': 1000, 'test': 1000}
 classes    = ['bird', 'drone']
 
 # file‐prefix → class mapping, per split
@@ -103,14 +103,14 @@ print("Splits:", os.listdir(subset_dir))  # should list ['train', 'val', 'test']
 #   - [-1, 1, Classify, [nc]]
 # and at top: nc: 2
 
-model = YOLO('yolov10n.yaml', task='classify')
+model = YOLO('yolov10b.yaml', task='classify')
 run_name = f"subset_{num_samples['train']}_{num_samples['valid']}_{num_samples['test']}"
 
 model.train(
     data=subset_dir,       # point to the root folder
     epochs=100,
     imgsz=224,             # smaller for classification
-    batch=16,              # reduce if you hit OOM
+    batch=8,              # reduce if you hit OOM
     project='bird-drone-subset',
     name=run_name,
     pretrained=True
