@@ -17,7 +17,7 @@ backbone:
   - [-1, 7, C2f, [128, True]]
   - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8
   - [-1, 10, C2f, [256, True]]
-  - [-1, 1, nn.Dropout2d, [0.1]]   
+  - [-1, 1, nn.Dropout2d, [0.2]]   
   - [-1, 1, SCDown, [512, 3, 2]] # 5-P4/16
   - [-1, 10, C2f, [512, True]]
   - [-1, 1, SCDown, [1024, 3, 2]] # 7-P5/32
@@ -36,6 +36,8 @@ head:
   - [-1, 1, nn.Flatten,           []]
   # bottleneck FC
   - [-1, 1, nn.Linear,           [512, 256]]
+  - [-1, 1, nn.SiLU,             []]
+  - [-1, 1, nn.Linear,           [256, 256]] 
   - [-1, 1, nn.SiLU,             []]
   - [-1, 1, nn.Dropout,          [0.2]]
   # classifier
