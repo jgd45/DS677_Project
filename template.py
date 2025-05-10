@@ -23,9 +23,16 @@ PREFIX_MAP    = {
     "valid": ("BV", "DV"),
     "test":  ("BT", "DT"),
 }
-TASK          = "classify"          # "classify" or "detect"
+TASK          = "detect"          # "classify" or "detect"
 # --------------------------------------------------------------------------- #
-
+def safe_run_name(base_dir: Path, run_name: str) -> str:
+    """Prevent overwriting by incrementing run name if folder exists."""
+    path = base_dir / run_name
+    count = 1
+    while path.exists():
+        path = base_dir / f"{run_name}_v{count}"
+        count += 1
+    return path.name
 
 def make_subset_classify() -> Path:
     """Build /subset/ in classification folder hierarchy."""
@@ -105,7 +112,8 @@ def make_subset_detect() -> tuple[Path, Path]:
 
 def train_classify(root: Path):
     model = YOLO("yolov10b.yaml", task="classify")
-    run_name = f"subset_{NUM_SAMPLES['train']}_{NUM_SAMPLES['valid']}_{NUM_SAMPLES['test']}"
+    base_name = f"subset_{NUM_SAMPLES['train']}_{NUM_SAMPLES['valid']}_{NUM_SAMPLES['test']}"
+    run_name = safe_run_name(Path("bird-drone-subset"), base_name)
     model.train(
     data=str(root),
     epochs=100,
@@ -124,7 +132,9 @@ def train_classify(root: Path):
 
 def train_detect(root: Path, data_yaml: Path):
     model = YOLO("yolov10m.yaml", task="detect")
-    run_name = f"subset_{NUM_SAMPLES['train']}_{NUM_SAMPLES['valid']}_{NUM_SAMPLES['test']}_det"
+    base_name = f"subset_{NUM_SAMPLES['train']}_{NUM_SAMPLES['valid']}_{NUM_SAMPLES['test']}_det"
+    run_name = safe_run_name(Path("bird-drone-subset"), base_name)
+    
     model.train(
     data=str(data_yaml),  
     epochs=100,
@@ -138,6 +148,7 @@ def train_detect(root: Path, data_yaml: Path):
     exist_ok=True,
     pretrained=True
     )
+    
     res = model.val(data=str(data_yaml), plots=True)
     p, r, m50, m5095 = res.box.mean_results()
     print(f"P {p:.4f} | R {r:.4f} | mAP50 {m50:.4f} | mAP50‑95 {m5095:.4f}")
