@@ -109,13 +109,16 @@ if task == 'classify':
     run_name = f"subset_{num_samples['train']}_{num_samples['valid']}_{num_samples['test']}"
 
     model.train(
-        data=subset_dir,       # point to the root folder
-        epochs=100,
-        imgsz=224,             # smaller for classification
-        batch=8,              # reduce if you hit OOM
-        project='bird-drone-subset',
-        name=run_name,
-        pretrained=True
+    data=subset_dir,
+    epochs=100,
+    imgsz=416,
+    batch=2,
+    lr0=0.0001690947468168212,
+    momentum=0.8573102587296049,
+    weight_decay=1.3724756935926911e-05,
+    project='bird-drone-subset',
+    name=run_name,
+    pretrained=True
     )
 
 
@@ -176,10 +179,17 @@ else:
     run_name = f"subset_{num_samples['train']}_{num_samples['valid']}_{num_samples['test']}_det"
 
     model.train(
-    data=os.path.join(subset_detect_dir, 'data.yaml'),
-    epochs=50, imgsz=640, batch=2,
-    project='bird-drone-subset', name=run_name,
-    exist_ok=True, pretrained=True
+    data=os.path.join(subset_detect_dir, 'data.yaml'),  
+    epochs=100,
+    imgsz=416,  
+    batch=2,     
+    lr0=0.0001690947468168212,
+    momentum=0.8573102587296049,
+    weight_decay=1.3724756935926911e-05,
+    project='bird-drone-subset',
+    name=run_name,
+    exist_ok=True,
+    pretrained=True
     )
 
 
